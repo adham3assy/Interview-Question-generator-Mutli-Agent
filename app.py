@@ -28,14 +28,5 @@ def main():
     run_streamlit_app()
 
 if __name__ == "__main__":
-    # Run the app directly when this script is executed
-    #import streamlit.web.cli as stcli
-    
-    # Prepare Streamlit args
-    sys.argv = ["streamlit", "run", 
-                os.path.join(project_root, "ui", "streamlit_app.py"),
-                "--server.port=8501", 
-                "--server.address=localhost"]
-    
-    # Run the Streamlit CLI
-    sys.exit(stcli.main())
+    main()
+
