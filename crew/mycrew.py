@@ -17,7 +17,7 @@ FALLBACK_QUESTIONS = [
     {"question": "What interests you most about this role?", "category": "General"}
 ]
 
-def run_interview_process(cv_text: str, job_title: str, job_description: str = "") -> List[Dict[str, str]]:
+def run_interview_process(cv_text: str, job_title: str, job_description: str = "" , hf_token=None) -> List[Dict[str, str]]:
     """
     Run the interview question generation process.
     """
