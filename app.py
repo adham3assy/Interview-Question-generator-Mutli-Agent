@@ -29,7 +29,7 @@ def main():
 
 if __name__ == "__main__":
     # Run the app directly when this script is executed
-    import streamlit.web.cli as stcli
+    #import streamlit.web.cli as stcli
     
     # Prepare Streamlit args
     sys.argv = ["streamlit", "run", 
