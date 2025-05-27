@@ -1,180 +1,119 @@
-# streamlit_app.py
 import os
 import sys
 import tempfile
-import json
-from typing import List, Dict
-# Import project modules
-from crew.mycrew import run_interview_process
-from utils.pdf_exporter import export_to_pdf
-from tools.pdf_parser_tool import PDFParserTool
 import streamlit as st
 from dotenv import load_dotenv
 
-# Setup environment
+# Load environment variables
 load_dotenv()
-DEFAULT_HF_TOKEN = os.getenv("HF_TOKEN")  # 🔧 Default token from .env
+DEFAULT_HF_TOKEN = os.getenv("HF_TOKEN")
 
 # Add project root to path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
+project_root = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(project_root)
 
+# Tools — import safely
+from tools.pdf_parser_tool import PDFParserTool
+from utils.pdf_exporter import export_to_pdf
 
-def extract_text_from_pdf(file_path):
-    tool = PDFParserTool()
-    return tool._run(file_path=file_path)
-
-
-def serialize_questions_for_json(questions: List[Dict]) -> str:
-    try:
-        clean_questions = []
-        for q in questions:
-            clean_questions.append({
-                "question": str(q.get("question", "")),
-                "category": str(q.get("category", "General"))
-            } if isinstance(q, dict) else {
-                "question": str(q),
-                "category": "General"
-            })
-        return json.dumps({"questions": clean_questions}, indent=2)
-    except Exception as e:
-        st.error(f"Error serializing questions: {str(e)}")
-        return json.dumps({"questions": [], "error": str(e)}, indent=2)
-
-
-@st.cache_resource(show_spinner="Initializing agents...")
-def get_question_generator():
+# Lazy-import heavy logic
+@st.cache_resource(show_spinner="Setting up agents...")
+def get_interview_runner():
+    from crew.mycrew import run_interview_process
     return run_interview_process
 
+# Extract text from uploaded PDF
+def extract_text_from_pdf(file_path):
+    parser = PDFParserTool()
+    return parser._run(file_path=file_path)
 
-def main():
-    st.set_page_config(
-        page_title="AI Interview Question Generator",
-        page_icon="🎯",
-        layout="wide"
-    )
+# Page setup
+st.set_page_config(page_title="Interview Generator", layout="wide")
+st.title("🎯 Custom Interview Question Generator")
 
-    st.title("🎯 Custom Interview Question Generator")
-    st.write("Upload a resume and specify a job title to generate tailored technical interview questions.")
+# Sidebar: optional Hugging Face token
+with st.sidebar:
+    st.markdown("### 🔑 Hugging Face Token (optional)")
+    user_token = st.text_input("Enter your token", type="password", placeholder="hf_...")
+    effective_token = user_token.strip() or DEFAULT_HF_TOKEN
+    if not effective_token:
+        st.warning("⚠️ No Hugging Face token set. Please add one to use the app.")
 
-    # 🔧 Hugging Face Token Input (Sidebar)
-    with st.sidebar:
-        st.markdown("### 🔑 Hugging Face Token")
-        user_token = st.text_input(
-            "Enter your Hugging Face API token",
-            type="password",
-            help="This is optional. Used only if you run out of the default token quota.",
-            placeholder="hf_..."
-        )
-        effective_token = user_token.strip() or DEFAULT_HF_TOKEN
-        if not effective_token:
-            st.warning("⚠️ No Hugging Face token provided. App may not work without it.")
+# Upload + inputs
+col1, col2 = st.columns(2)
+with col1:
+    uploaded_file = st.file_uploader("📄 Upload CV (PDF)", type="pdf")
+with col2:
+    job_title = st.text_input("🧑‍💻 Job Title", placeholder="e.g., AI Engineer")
+    job_description = st.text_area("📋 Job Description (optional)")
 
-    col1, col2 = st.columns([1, 1])
+# Generate Button
+if st.button("🚀 Generate Interview Questions"):
+    if not uploaded_file or not job_title:
+        st.error("❗ Please upload a CV and enter a job title.")
+        st.stop()
 
-    with col1:
-        uploaded_file = st.file_uploader("Upload CV (PDF)", type="pdf")
+    with st.spinner("Reading and processing CV..."):
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(uploaded_file.getvalue())
+            pdf_path = tmp.name
 
-    with col2:
-        job_title = st.text_input("Enter Job Title", placeholder="e.g., Machine Learning Engineer")
-        job_description = st.text_area("Optional Job Description", placeholder="Paste job description here...")
+        try:
+            cv_text = extract_text_from_pdf(pdf_path)
+            os.remove(pdf_path)
+        except Exception as e:
+            st.error(f"❌ Failed to extract text: {str(e)}")
+            st.stop()
 
-    if st.button("Generate Questions", type="primary"):
-        if not uploaded_file:
-            st.error("Please upload a CV file.")
-            return
+    if len(cv_text.strip()) < 50:
+        st.error("❌ CV text is too short or empty.")
+        st.stop()
 
-        if not job_title:
-            st.error("Please enter a job title.")
-            return
+    with st.spinner("Generating questions..."):
+        try:
+            runner = get_interview_runner()
+            questions = runner(cv_text, job_title, job_description, hf_token=effective_token)
+        except Exception as e:
+            st.error(f"❌ Agent failed: {str(e)}")
+            st.stop()
 
-        with st.spinner("Processing CV and generating questions..."):
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-                tmp_file.write(uploaded_file.getvalue())
-                tmp_file_path = tmp_file.name
+    if not questions or not isinstance(questions, list):
+        st.error("⚠️ No questions generated.")
+        st.stop()
 
-            try:
-                st.info("📄 Extracting text from PDF...")
-                cv_text = extract_text_from_pdf(tmp_file_path)
-                os.unlink(tmp_file_path)
+    st.success("✅ Questions generated!")
+    st.subheader("📋 Interview Questions")
 
-                if not cv_text or len(cv_text.strip()) < 50:
-                    st.error("Could not extract meaningful text from the PDF. Ensure it contains readable text.")
-                    return
+    for i, q in enumerate(questions, 1):
+        if isinstance(q, dict):
+            st.markdown(f"**Q{i}.** {q.get('question', 'Unknown')} ({q.get('category', 'General')})")
+        else:
+            st.markdown(f"**Q{i}.** {q}")
 
-                st.info("🤖 Generating interview questions...")
-                question_generator = get_question_generator()
+    # Download buttons
+    try:
+        pdf_data = export_to_pdf(questions)
+        st.download_button("📄 Download as PDF", data=pdf_data, file_name="interview_questions.pdf", mime="application/pdf")
+    except Exception as e:
+        st.error(f"Failed to generate PDF: {str(e)}")
 
-                # 🔧 Pass the token into the function call (adjust this line if your agent setup takes the token)
-                questions = question_generator(cv_text, job_title, job_description, hf_token=effective_token)
+    try:
+        import json
+        json_data = json.dumps({"questions": questions}, indent=2)
+        st.download_button("📊 Download as JSON", data=json_data, file_name="interview_questions.json", mime="application/json")
+    except Exception as e:
+        st.error(f"Failed to generate JSON: {str(e)}")
 
-                if not questions or not isinstance(questions, list):
-                    st.error("Failed to generate questions.")
-                    return
+# Info section
+with st.expander("ℹ️ How this works"):
+    st.markdown("""
+    This app analyzes a candidate's CV and generates interview questions tailored to the job title and description using AI agents powered by Hugging Face LLMs.
 
-                st.success("✅ Interview questions generated successfully!")
+    **Steps:**
+    1. Upload a resume
+    2. Enter the job title (and optionally job description)
+    3. Click "Generate"
+    4. Download as PDF or JSON
 
-                categories = {}
-                for q in questions:
-                    question_text = q.get("question", str(q)) if isinstance(q, dict) else str(q)
-                    category = q.get("category", "General") if isinstance(q, dict) else "General"
-                    categories.setdefault(category, []).append(question_text)
-
-                st.subheader("📋 Generated Questions")
-                for category, qs in categories.items():
-                    with st.expander(f"{category} Questions ({len(qs)} questions)"):
-                        for i, question in enumerate(qs, 1):
-                            st.markdown(f"**Q{i}.** {question}")
-
-                col1, col2 = st.columns([1, 1])
-                with col1:
-                    try:
-                        pdf_data = export_to_pdf(questions)
-                        st.download_button(
-                            label="📄 Download as PDF",
-                            data=pdf_data,
-                            file_name="interview_questions.pdf",
-                            mime="application/pdf"
-                        )
-                    except Exception as e:
-                        st.error(f"PDF export failed: {str(e)}")
-
-                with col2:
-                    try:
-                        json_data = serialize_questions_for_json(questions)
-                        st.download_button(
-                            label="📊 Download as JSON",
-                            data=json_data,
-                            file_name="interview_questions.json",
-                            mime="application/json"
-                        )
-                    except Exception as e:
-                        st.error(f"JSON export failed: {str(e)}")
-
-                with st.expander("🔍 Debug Info"):
-                    st.code(str(questions), language="python")
-                    st.write(f"Number of questions: {len(questions)}")
-                    st.write("Categories:", list(categories.keys()))
-
-            except Exception as e:
-                st.error(f"An unexpected error occurred: {str(e)}")
-                import traceback
-                with st.expander("🔍 Error Details"):
-                    st.code(traceback.format_exc(), language="python")
-
-    with st.expander("📖 How It Works"):
-        st.markdown("""
-        ### How This App Works
-        1. **Upload Resume**: Upload the candidate's resume as a PDF.
-        2. **Specify Job**: Provide a job title (and optionally a job description).
-        3. **Generate Questions**: The system uses AI agents to analyze and generate custom interview questions.
-        4. **Download**: Export the questions as PDF or JSON.
-
-        ⚠️ PDF must have actual text (not just scanned images).
-
-        Powered by [CrewAI](https://github.com/joaomdmoura/crewAI) and [Hugging Face Transformers](https://huggingface.co).
-        """)
-
-
-if __name__ == "__main__":
-    main()
+    If the default token is out of quota, enter your own Hugging Face token in the sidebar.
+    """)
