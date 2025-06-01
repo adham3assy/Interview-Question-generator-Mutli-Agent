@@ -1,6 +1,5 @@
 # crew/agents.py
 from crewai import Agent
-from models.huggingface_llm import HuggingFaceLLM
 from tools.job_profile_tool import JobProfileTool
 from tools.pdf_parser_tool import PDFParserTool
 import os
