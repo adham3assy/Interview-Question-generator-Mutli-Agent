@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import requests
 
 class HuggingFaceLLM(BaseLLM):
-    def __init__(self, model_name: str = "mistralai/Mistral-7B-Instruct-v0.1", api_token: Optional[str] = None, temperature: float = 0.5, max_new_tokens: int = 1024):
+    def __init__(self, model_name: str = "mistralai/Mistral-7B-Instruct-v0.3", api_token: Optional[str] = None, temperature: float = 0.5, max_new_tokens: int = 1024):
         if api_token is None:
             from dotenv import load_dotenv
             load_dotenv()
