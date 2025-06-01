@@ -17,10 +17,20 @@ FALLBACK_QUESTIONS = [
     {"question": "What interests you most about this role?", "category": "General"}
 ]
 
-def run_interview_process(cv_text: str, job_title: str, job_description: str = "" , hf_token=None) -> List[Dict[str, str]]:
+def run_interview_process(cv_text: str, job_title: str, job_description: str = "", hf_token=None) -> List[Dict[str, str]]:
     """
     Run the interview question generation process.
     """
+    # 🧠 Instantiate Hugging Face LLM and assign to agents
+    try:
+        llm = HuggingFaceLLM(api_token=hf_token)
+        cv_agent.llm = llm
+        role_agent.llm = llm
+        question_agent.llm = llm
+        print("✅ Custom HF LLM assigned to agents")
+    except Exception as e:
+        print("❌ LLM initialization failed:", e)
+        return FALLBACK_QUESTIONS
     
     cv_task = Task(
     agent=cv_agent,
