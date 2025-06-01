@@ -73,13 +73,27 @@ if st.button("🚀 Generate Interview Questions"):
         st.error("❌ Extracted CV text is too short.")
         st.stop()
 
-    with st.spinner("🧠 Generating questions..."):
-        try:
-            run_interview = get_interview_runner()
-            questions = run_interview(cv_text, job_title, job_description, hf_token=effective_token)
-        except Exception as e:
-            st.error(f"❌ Agent execution failed: {e}")
-            st.stop()
+    # Show progress bar instead of spinner
+    progress_bar = st.progress(0, text="🧠 Generating questions...")
+    
+    # Simulate incremental steps to show activity (not required, but improves UX)
+    for percent_complete in range(0, 70, 10):
+        import time
+        time.sleep(0.3)
+        progress_bar.progress(percent_complete, text="🧠 Generating questions...")
+    
+    try:
+        run_interview = get_interview_runner()
+        questions = run_interview(cv_text, job_title, job_description, hf_token=effective_token)
+    
+        # Complete the progress bar after successful generation
+        progress_bar.progress(100, text="✅ Questions generated!")
+    
+    except Exception as e:
+        progress_bar.empty()
+        st.error(f"❌ Agent execution failed: {e}")
+        st.stop()
+
 
     if not questions or not isinstance(questions, list):
         st.error("⚠️ No questions generated.")
