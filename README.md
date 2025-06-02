@@ -2,7 +2,7 @@
 
 A multi-agent AI system that generates customized **technical interview questions** based on a candidate's uploaded **CV (PDF)** and the **target job title** — powered by **LLMs from Hugging Face**, a **Streamlit frontend**, and **CrewAI-based agents**.
 
-🚀 Try it online: [Streamlit Cloud App](https://interview-question-generator-mutli-agent.streamlit.app)
+🚀 Try it online: [Streamlit Cloud App]( https://lnkd.in/eV9k_HWd)
 
 ---
 
